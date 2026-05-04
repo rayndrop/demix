@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Demix</title>
+  <style>
+
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #0a0a0f;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 480px;
+      padding: 40px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 40px;
+    }
+
+    .title {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #2979ff, #00e5ff);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+    }
+
+    .button-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    /* Shazam-inspired pulsing button */
+    .shazam-btn-wrapper {
+      position: relative;
+      width: 160px;
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    /* Outer pulse rings - always blue now */
+    .pulse-ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 2px solid rgba(41, 121, 255, 0.4);
+      animation: pulseRing 2.5s ease-out infinite;
+      pointer-events: none;
+    }
+
+    .pulse-ring:nth-child(1) { width: 160px; height: 160px; animation-delay: 0s; }
+    .pulse-ring:nth-child(2) { width: 160px; height: 160px; animation-delay: 0.6s; }
+    .pulse-ring:nth-child(3) { width: 160px; height: 160px; animation-delay: 1.2s; }
+
+    @keyframes pulseRing {
+      0%   { transform: scale(1);   opacity: 0.8; }
+      100% { transform: scale(1.9); opacity: 0; }
+    }
+
+    /* Main circular button - stays blue throughout */
+    .shazam-btn {
+      position: relative;
+      z-index: 10;
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1a6eff, #0044cc);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow:
+        0 0 0 6px rgba(41, 121, 255, 0.15),
+        0 8px 32px rgba(41, 121, 255, 0.4);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .shazam-btn:hover {
+      transform: scale(1.05);
+      box-shadow:
+        0 0 0 8px rgba(41, 121, 255, 0.2),
+        0 12px 40px rgba(41, 121, 255, 0.5);
+    }
+
+    .shazam-btn:active { transform: scale(0.97); }
+
+    /* ACTIVE STATE - subtle pulse */
+    .shazam-btn.active {
+      animation: activePulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes activePulse {
+      0%, 100% { box-shadow: 0 0 0 6px rgba(41,121,255,0.15), 0 8px 32px rgba(41,121,255,0.4); }
+      50%       { box-shadow: 0 0 0 12px rgba(41,121,255,0.08), 0 8px 40px rgba(41,121,255,0.5); }
+    }
+
+    .btn-icon {
+      width: 40px;
+      height: 40px;
+      transition: transform 0.3s ease;
+    }
+
+    .shazam-btn.active .btn-icon {
+      animation: rotate 2s linear infinite;
+    }
+
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    .btn-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: rgba(255,255,255,0.85);
+      text-transform: uppercase;
+    }
+
+    /* Status text below button */
+    .status-text {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      min-height: 48px;
+      max-width: 320px;
+      transition: color 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .status-text.success { color: #66bb6a; }
+    .status-text.error { color: #ef5350; }
+
+    /* Confirmation overlay for cancel during processing */
+    .confirm-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .confirm-overlay.visible { display: flex; }
+
+    .confirm-box {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 320px;
+      text-align: center;
+    }
+
+    .confirm-box p {
+      font-size: 0.95rem;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .confirm-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .confirm-btn {
+      padding: 10px 24px;
+      border-radius: 20px;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .confirm-btn:hover { opacity: 0.8; }
+
+    .confirm-btn.cancel-confirm {
+      background: #ef5350;
+      color: white;
+    }
+
+    .confirm-btn.continue {
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* Results Section */
+    .results-section {
+      width: 100%;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      animation: fadeIn 0.4s ease;
+    }
+
+    .results-section.visible { display: flex; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .results-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      color: rgba(255,255,255,0.3);
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    /* Single song notice */
+    .single-song-notice {
+      background: rgba(255, 193, 7, 0.1);
+      border: 1px solid rgba(255, 193, 7, 0.3);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 0.85rem;
+      color: #ffc107;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    /* Song card */
+    .song-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .song-card.vocal  { border-left: 3px solid #2979ff; }
+    .song-card.instrumental { border-left: 3px solid #ab47bc; }
+
+    .song-artwork {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+
+    .artwork-placeholder {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 1.4rem;
+    }
+
+    .song-info { flex: 1; min-width: 0; }
+
+    .song-type {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .song-card.vocal .song-type { color: #2979ff; }
+    .song-card.instrumental .song-type { color: #ab47bc; }
+
+    .song-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .song-artist {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.5);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .song-links {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .song-link {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+
+    .song-link:hover { opacity: 0.8; }
+    .song-link.apple  { background: rgba(252,60,68,0.15); color: #fc3c44; }
+    .song-link.spotify { background: rgba(29,185,84,0.15); color: #1db954; }
+
+    /* Divider between songs */
+    .mashup-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 0;
+    }
+
+    .mashup-divider::before,
+    .mashup-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(255,255,255,0.1);
+    }
+
+    .mashup-divider span {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.2);
+      text-transform: uppercase;
+    }
+
+    /* Try again button */
+    .try-again-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.5);
+      border-radius: 25px;
+      padding: 10px 28px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      align-self: center;
+    }
+
+    .try-again-btn:hover {
+      border-color: rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.8);
+    }
+
+    /* Error box */
+    .error-box {
+      background: rgba(229,57,53,0.1);
+      border: 1px solid rgba(229,57,53,0.3);
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 0.85rem;
+      color: #ef9a9a;
+      text-align: center;
+      display: none;
+      max-width: 400px;
+    }
+
+    .error-box.visible { display: block; }
+
+  </style>
+</head>
+<body>
+
+  <div class="app">
+
+    <!-- Title -->
+    <h1 class="title">Demix</h1>
+
+    <!-- Button Section -->
+    <div class="button-section">
+
+      <div class="shazam-btn-wrapper" id="btnWrapper">
+        <!-- Pulse rings -->
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring"></div>
+
+        <!-- Main button -->
+        <button class="shazam-btn" id="mainBtn" onclick="handleButtonClick()">
+          <!-- Waveform icon -->
+          <svg class="btn-icon" viewBox="0 0 40 40" fill="none">
+            <rect x="4"  y="15" width="4" height="10" rx="2" fill="white" opacity="0.9"/>
+            <rect x="11" y="10" width="4" height="20" rx="2" fill="white"/>
+            <rect x="18" y="6"  width="4" height="28" rx="2" fill="white"/>
+            <rect x="25" y="10" width="4" height="20" rx="2" fill="white"/>
+            <rect x="32" y="15" width="4" height="10" rx="2" fill="white" opacity="0.9"/>
+          </svg>
+          <span class="btn-label" id="btnLabel">Demix</span>
+        </button>
+      </div>
+
+      <!-- Status text -->
+      <p class="status-text" id="statusText">Tap to identify a mashup</p>
+
+    </div>
+
+    <!-- Error box -->
+    <div class="error-box" id="errorBox"></div>
+
+    <!-- Results Section -->
+    <div class="results-section" id="resultsSection">
+      <p class="results-label" id="resultsLabel">Mashup Identified</p>
+      
+      <!-- Single song notice -->
+      <div class="single-song-notice" id="singleSongNotice" style="display:none;">
+        ⚠️ This appears to be a single song, not a mashup
+      </div>
+
+      <!-- Vocal Song Card -->
+      <div class="song-card vocal" id="vocalCard">
+        <div class="artwork-placeholder" id="vocalArtworkPlaceholder">🎤</div>
+        <img class="song-artwork" id="vocalArtwork" style="display:none" alt="artwork"/>
+        <div class="song-info">
+          <div class="song-type">Vocal Track</div>
+          <div class="song-title" id="vocalTitle">—</div>
+          <div class="song-artist" id="vocalArtist">—</div>
+          <div class="song-links" id="vocalLinks"></div>
+        </div>
+      </div>
+
+      <!-- Mashup Divider -->
+      <div class="mashup-divider" id="mashupDivider"><span>mixed with</span></div>
+
+      <!-- Instrumental Song Card -->
+      <div class="song-card instrumental" id="instrumentalCard">
+        <div class="artwork-placeholder" id="instrumentalArtworkPlaceholder">🎹</div>
+        <img class="song-artwork" id="instrumentalArtwork" style="display:none" alt="artwork"/>
+        <div class="song-info">
+          <div class="song-type">Instrumental Track</div>
+          <div class="song-title" id="instrumentalTitle">—</div>
+          <div class="song-artist" id="instrumentalArtist">—</div>
+          <div class="song-links" id="instrumentalLinks"></div>
+        </div>
+      </div>
+
+      <!-- Try Again -->
+      <button class="try-again-btn" onclick="resetApp()">Try Another</button>
+
+    </div>
+
+  </div>
+
+  <!-- Confirmation overlay for canceling during processing -->
+  <div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-box">
+      <p>Processing in progress. Are you sure you want to cancel?</p>
+      <div class="confirm-buttons">
+        <button class="confirm-btn cancel-confirm" onclick="confirmCancel()">Cancel Process</button>
+        <button class="confirm-btn continue" onclick="closeConfirm()">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+    // ── State ──
+    const STATE = { IDLE: 'idle', RECORDING: 'recording', PROCESSING: 'processing', DONE: 'done' };
+    let currentState = STATE.IDLE;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordingSeconds = 15;
+    let processingCancelled = false;
+    const BACKEND_URL = 'http://localhost:3002';
+
+    // ── DOM Elements ──
+    const mainBtn           = document.getElementById('mainBtn');
+    const btnLabel          = document.getElementById('btnLabel');
+    const statusText        = document.getElementById('statusText');
+    const resultsSection    = document.getElementById('resultsSection');
+    const errorBox          = document.getElementById('errorBox');
+    const confirmOverlay    = document.getElementById('confirmOverlay');
+    const singleSongNotice  = document.getElementById('singleSongNotice');
+    const mashupDivider     = document.getElementById('mashupDivider');
+    const instrumentalCard  = document.getElementById('instrumentalCard');
+    const resultsLabel      = document.getElementById('resultsLabel');
+
+    // ── Button Click Handler ──
+    function handleButtonClick() {
+      if (currentState === STATE.IDLE) {
+        startRecording();
+      } else if (currentState === STATE.RECORDING) {
+        // Immediately cancel recording
+        cancelRecording();
+      } else if (currentState === STATE.PROCESSING) {
+        // Show confirmation dialog
+        confirmOverlay.classList.add('visible');
+      }
+    }
+
+    // ── Start Recording ──
+    async function startRecording() {
+      try {
+
+        // Request microphone access
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // Reset state
+        audioChunks = [];
+        processingCancelled = false;
+        currentState = STATE.RECORDING;
+
+        // Update UI - button stays blue, just add active animation
+        mainBtn.classList.add('active');
+        btnLabel.textContent = 'Stop';
+        setStatus('Listening to audio...');
+        hideResults();
+        hideError();
+
+        // Auto-stop after 15 seconds
+        const autoStopTimeout = setTimeout(() => {
+          if (currentState === STATE.RECORDING) {
+            stopRecording();
+          }
+        }, recordingSeconds * 1000);
+
+        // Start MediaRecorder
+        mediaRecorder = new MediaRecorder(stream, { mimeType: getSupportedMimeType() });
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          clearTimeout(autoStopTimeout);
+          stream.getTracks().forEach(track => track.stop());
+          
+          // Check if user cancelled
+          if (currentState === STATE.RECORDING) {
+            // This means stopRecording() was called, proceed to processing
+            await processAudio();
+          } else {
+            // User clicked cancel, just reset
+            mainBtn.classList.remove('active');
+            resetApp();
+          }
+        };
+
+        mediaRecorder.start(100); // Collect data every 100ms
+
+      } catch (err) {
+        console.error('Microphone error:', err);
+        showError('Microphone access denied. Please allow microphone access and try again.');
+        resetApp();
+      }
+    }
+
+    // ── Stop Recording (natural end at 15s) ──
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        currentState = STATE.PROCESSING;
+        mediaRecorder.stop();
+      }
+    }
+
+    // ── Cancel Recording (user clicked stop during recording) ──
+    function cancelRecording() {
+      console.log('Recording cancelled by user');
+      currentState = STATE.IDLE; // Mark as cancelled
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop(); // This will trigger onstop, which checks currentState
+      }
+      audioChunks = []; // Clear recorded data
+      mainBtn.classList.remove('active');
+      btnLabel.textContent = 'Demix';
+      setStatus('Recording cancelled');
+      
+      // Reset after brief moment
+      setTimeout(() => {
+        setStatus('Tap to identify a mashup');
+      }, 1500);
+    }
+
+    // ── Process Audio → Send to Backend ──
+    async function processAudio() {
+      try {
+        // Build audio blob from recorded chunks
+        const mimeType = getSupportedMimeType();
+        const audioBlob = new Blob(audioChunks, { type: mimeType });
+        const ext = mimeType.includes('webm') ? '.webm' : mimeType.includes('ogg') ? '.ogg' : '.mp4';
+
+        console.log(`Audio recorded: ${(audioBlob.size / 1024).toFixed(1)} KB`);
+
+        // Update UI to processing state - button stays blue
+        btnLabel.textContent = '...';
+        setStatus('Identifying mashup...');
+
+        // Create form data
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording' + ext);
+
+        // Send to backend
+        console.log('Sending to backend...');
+        const response = await fetch(`${BACKEND_URL}/api/recognize`, {
+          method: 'POST',
+          body: formData
+        });
+
+        // Check if user cancelled during processing
+        if (processingCancelled) {
+          console.log('Processing was cancelled, ignoring results');
+          return;
+        }
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || 'Recognition failed');
+        }
+
+        const result = await response.json();
+        console.log('Result:', result);
+
+        // Display results
+        displayResults(result);
+
+      } catch (err) {
+        console.error('Processing error:', err);
+        
+        // Check if cancelled
+        if (processingCancelled) {
+          return;
+        }
+
+        showError(`Recognition failed: ${err.message}`);
+        mainBtn.classList.remove('active');
+        currentState = STATE.IDLE;
+        btnLabel.textContent = 'Demix';
+        setStatus('Tap to identify a mashup');
+      }
+    }
+
+    // ── Confirmation Dialog Handlers ──
+    function confirmCancel() {
+      processingCancelled = true;
+      closeConfirm();
+      mainBtn.classList.remove('active');
+      currentState = STATE.IDLE;
+      btnLabel.textContent = 'Demix';
+      setStatus('Process cancelled');
+      
+      setTimeout(() => {
+        setStatus('Tap to identify a mashup');
+      }, 1500);
+    }
+
+    function closeConfirm() {
+      confirmOverlay.classList.remove('visible');
+    }
+
+    // ── Display Results ──
+    function displayResults(result) {
+      mainBtn.classList.remove('active');
+      currentState = STATE.DONE;
+      btnLabel.textContent = '✓';
+
+      const vocalTrack = result.vocalTrack;
+      const instrumentalTrack = result.instrumentalTrack;
+
+      // Edge case: Neither track recognized
+      if (!vocalTrack.recognized && !instrumentalTrack.recognized) {
+        showError('Sorry, we couldn\'t identify any music in the recording. Make sure the audio is clear and try again.');
+        setTimeout(() => resetApp(), 3000);
+        return;
+      }
+
+      // Edge case: Both tracks are the same song (single song, not a mashup)
+      const isSameSong = vocalTrack.recognized && instrumentalTrack.recognized && 
+        (vocalTrack.shazamId === instrumentalTrack.shazamId || 
+         (vocalTrack.title === instrumentalTrack.title && vocalTrack.artist === instrumentalTrack.artist));
+
+      if (isSameSong) {
+        // Show single song notice
+        singleSongNotice.style.display = 'block';
+        mashupDivider.style.display = 'none';
+        instrumentalCard.style.display = 'none';
+        resultsLabel.textContent = 'Single Song Identified';
+        setStatus('This is a single song');
+      } else {
+        // Normal mashup result
+        singleSongNotice.style.display = 'none';
+        mashupDivider.style.display = 'flex';
+        instrumentalCard.style.display = 'flex';
+        resultsLabel.textContent = 'Mashup Identified';
+        setStatus('Mashup identified!', 'success');
+      }
+
+      // Populate vocal card
+      populateSongCard(
+        vocalTrack,
+        'vocalTitle', 'vocalArtist', 'vocalArtwork',
+        'vocalArtworkPlaceholder', 'vocalLinks'
+      );
+
+      // Populate instrumental card (even if hidden for single song)
+      populateSongCard(
+        instrumentalTrack,
+        'instrumentalTitle', 'instrumentalArtist', 'instrumentalArtwork',
+        'instrumentalArtworkPlaceholder', 'instrumentalLinks'
+      );
+
+      // Show results
+      resultsSection.classList.add('visible');
+    }
+
+    // ── Populate a Song Card ──
+    function populateSongCard(track, titleId, artistId, artworkId, placeholderId, linksId) {
+      document.getElementById(titleId).textContent = track.title || 'Not Recognized';
+      document.getElementById(artistId).textContent = track.artist || '—';
+
+      // Artwork
+      if (track.artworkUrl) {
+        const img = document.getElementById(artworkId);
+        img.src = track.artworkUrl;
+        img.style.display = 'block';
+        document.getElementById(placeholderId).style.display = 'none';
+      } else {
+        document.getElementById(artworkId).style.display = 'none';
+        document.getElementById(placeholderId).style.display = 'flex';
+      }
+
+      // Links
+      const linksContainer = document.getElementById(linksId);
+      linksContainer.innerHTML = '';
+
+      if (track.recognized) {
+        if (track.appleMusicUrl) {
+          const a = document.createElement('a');
+          a.href = track.appleMusicUrl;
+          a.target = '_blank';
+          a.className = 'song-link apple';
+          a.textContent = 'Apple Music';
+          linksContainer.appendChild(a);
+        }
+
+        if (track.spotifyUrl) {
+          const a = document.createElement('a');
+          a.href = track.spotifyUrl;
+          a.target = '_blank';
+          a.className = 'song-link spotify';
+          a.textContent = 'Spotify';
+          linksContainer.appendChild(a);
+        }
+      }
+    }
+
+    // ── Reset App ──
+    function resetApp() {
+      currentState = STATE.IDLE;
+      processingCancelled = false;
+      mainBtn.classList.remove('active');
+      btnLabel.textContent = 'Demix';
+      setStatus('Tap to identify a mashup');
+      hideResults();
+      hideError();
+      audioChunks = [];
+    }
+
+    // ── Helpers ──
+    function setStatus(text, type = '') {
+      statusText.textContent = text;
+      statusText.className = 'status-text ' + type;
+    }
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.classList.add('visible');
+    }
+
+    function hideError() {
+      errorBox.classList.remove('visible');
+    }
+
+    function hideResults() {
+      resultsSection.classList.remove('visible');
+    }
+
+    // Get best supported audio format for recording
+    function getSupportedMimeType() {
+      const types = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+        'audio/mp4'
+      ];
+      for (const type of types) {
+        if (MediaRecorder.isTypeSupported(type)) return type;
+      }
+      return 'audio/webm';
+    }
+
+  </script>
+
+</body>
+</html>
+
